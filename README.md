@@ -11,7 +11,7 @@ A CLI for Bilibili — browse videos, users, favorites from the terminal 📺
 - 🔍 **Search** — search users or videos by keyword
 - 🔥 **Trending** — hot videos and site-wide ranking
 - 📰 **Feed** — dynamic timeline from your follows
-- 📂 **Favorites** — browse favorite folders and watch-later list
+- 📂 **Favorites** — browse favorite folders, watch-later, and watch history
 - 👍 **Interactions** — like, coin, triple (一键三连)
 - 🔐 **Smart auth** — auto-extracts cookies from Chrome/Firefox, or QR code login
 - 📊 **JSON output** — major query commands support `--json` for scripting
@@ -77,7 +77,8 @@ bili feed                               # Dynamic timeline
 bili favorites                          # Favorite folders
 bili favorites <ID> --page 2            # Videos in a folder
 bili following                          # Following list
-bili history                            # Watch later
+bili watch-later                        # Watch later
+bili history                            # Watch history
 
 # Interactions
 bili like BV1ABcsztEcY                  # Like
@@ -135,7 +136,7 @@ All bilibili-cli commands are available in OpenClaw after installation.
 - 🔍 **搜索** — 按关键词搜索用户或视频
 - 🔥 **发现** — 热门视频、全站排行榜
 - 📰 **动态** — 关注的人的动态时间线
-- 📂 **收藏** — 收藏夹浏览、稍后再看
+- 📂 **收藏** — 收藏夹浏览、稍后再看、观看历史
 - 👍 **互动** — 点赞、投币、一键三连
 - 🔐 **智能认证** — 自动提取浏览器 Cookie，或扫码登录
 - 📊 **JSON 输出** — 主要查询命令支持 `--json`，方便脚本调用
@@ -191,7 +192,8 @@ bili feed                               # 动态时间线
 # 收藏
 bili favorites                          # 收藏夹列表
 bili following                          # 关注列表
-bili history                            # 稍后再看
+bili watch-later                        # 稍后再看
+bili history                            # 观看历史
 
 # 互动
 bili like BV1ABcsztEcY                  # 点赞

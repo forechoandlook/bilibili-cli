@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from datetime import datetime
 
 import click
 from rich.table import Table
@@ -133,8 +134,61 @@ def following(page: int, as_json: bool):
 
 
 @click.command()
+@click.option("--page", "-p", default=1, type=click.IntRange(1), help="页码 (默认 1，最小 1)。")
+@click.option("--max", "-n", "count", default=30, type=click.IntRange(1, 100), help="显示数量 (默认 30，1-100)。")
 @click.option("--json", "as_json", is_flag=True, help="输出原始 JSON。")
-def history(as_json: bool):
+def history(page: int, count: int, as_json: bool):
+    """查看观看历史。"""
+    from .. import client
+
+    cred = common.require_login()
+    data = common.run_or_exit(
+        client.get_watch_history(page=page, count=count, credential=cred),
+        "获取观看历史失败",
+    )
+
+    if as_json:
+        click.echo(json.dumps(data, ensure_ascii=False, indent=2))
+        return
+
+    if isinstance(data, list):
+        vlist = data
+    else:
+        vlist = data.get("list") or data.get("items") or data.get("data") or []
+
+    if not isinstance(vlist, list) or not vlist:
+        common.console.print("[yellow]观看历史为空[/yellow]")
+        return
+
+    table = Table(title=f"🕘 观看历史  (第 {page} 页)", border_style="blue")
+    table.add_column("#", style="dim", width=4)
+    table.add_column("标识", style="cyan", width=14)
+    table.add_column("标题", max_width=36)
+    table.add_column("UP主", width=12)
+    table.add_column("观看时间", width=12)
+
+    for i, v in enumerate(vlist[:count], 1):
+        history_info = v.get("history", {}) if isinstance(v, dict) else {}
+        owner = v.get("owner", {}) if isinstance(v, dict) else {}
+        view_at = history_info.get("view_at") or (v.get("view_at", 0) if isinstance(v, dict) else 0)
+        if isinstance(view_at, int) and view_at > 0:
+            view_time = datetime.fromtimestamp(view_at).strftime("%m-%d %H:%M")
+        else:
+            view_time = "-"
+        table.add_row(
+            str(i),
+            history_info.get("bvid") or v.get("bvid", "") or str(history_info.get("oid", "")),
+            (v.get("title", "") or v.get("name", ""))[:36],
+            (owner.get("name", "") or v.get("author_name", "") or v.get("author", ""))[:12],
+            view_time,
+        )
+
+    common.console.print(table)
+
+
+@click.command(name="watch-later")
+@click.option("--json", "as_json", is_flag=True, help="输出原始 JSON。")
+def watch_later(as_json: bool):
     """查看稍后再看列表。"""
     from .. import client
 
@@ -151,8 +205,8 @@ def history(as_json: bool):
         common.console.print("[yellow]稍后再看列表为空[/yellow]")
         return
 
-    count = data.get("count", len(vlist))
-    table = Table(title=f"⏰ 稍后再看  (共 {count} 个)", border_style="blue")
+    total = data.get("count", len(vlist))
+    table = Table(title=f"⏰ 稍后再看  (共 {total} 个)", border_style="blue")
     table.add_column("#", style="dim", width=4)
     table.add_column("BV号", style="cyan", width=14)
     table.add_column("标题", max_width=36)

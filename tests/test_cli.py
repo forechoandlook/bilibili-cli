@@ -392,8 +392,43 @@ def test_history_requires_login(runner):
 def test_history_api_error_returns_nonzero(runner):
     mock_cred = MagicMock()
     with patch("bili_cli.commands.common.get_credential", return_value=mock_cred), \
-         patch("bili_cli.client.get_toview", new_callable=AsyncMock, side_effect=Exception("api down")):
+         patch("bili_cli.client.get_watch_history", new_callable=AsyncMock, side_effect=Exception("api down")):
         result = runner.invoke(cli, ["history"])
+        assert result.exit_code != 0
+        assert "获取观看历史失败" in result.output
+
+
+def test_history_forwards_page_and_max(runner):
+    mock_cred = MagicMock()
+    with patch("bili_cli.commands.common.get_credential", return_value=mock_cred), \
+         patch("bili_cli.client.get_watch_history", new_callable=AsyncMock, return_value={"list": []}) as mock_history:
+        result = runner.invoke(cli, ["history", "--page", "2", "--max", "40"])
+        assert result.exit_code == 0
+        mock_history.assert_awaited_once_with(page=2, count=40, credential=mock_cred)
+
+
+def test_history_invalid_page(runner):
+    result = runner.invoke(cli, ["history", "--page", "0"])
+    assert result.exit_code != 0
+
+
+def test_history_invalid_max(runner):
+    result = runner.invoke(cli, ["history", "--max", "101"])
+    assert result.exit_code != 0
+
+
+def test_watch_later_requires_login(runner):
+    with patch("bili_cli.commands.common.get_credential", return_value=None):
+        result = runner.invoke(cli, ["watch-later"])
+        assert result.exit_code != 0
+        assert "需要登录" in result.output
+
+
+def test_watch_later_api_error_returns_nonzero(runner):
+    mock_cred = MagicMock()
+    with patch("bili_cli.commands.common.get_credential", return_value=mock_cred), \
+         patch("bili_cli.client.get_toview", new_callable=AsyncMock, side_effect=Exception("api down")):
+        result = runner.invoke(cli, ["watch-later"])
         assert result.exit_code != 0
         assert "获取稍后再看失败" in result.output
 

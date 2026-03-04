@@ -356,6 +356,19 @@ async def get_followings(
     return await _call_api("获取关注列表", u.get_followings(pn=pn, ps=ps))
 
 
+async def get_watch_history(
+    page: int = 1, count: int = 30, credential: Credential | None = None
+) -> dict[str, Any]:
+    """Fetch watch history (观看历史)."""
+    if credential is None:
+        raise AuthenticationError("credential is required for watch history")
+    per_page = max(1, min(count, 100))
+    return await _call_api(
+        "获取观看历史",
+        user.get_self_history(page_num=page, per_page_item=per_page, credential=credential),
+    )
+
+
 async def get_toview(credential: Credential) -> dict[str, Any]:
     """Fetch watch-later (稍后再看) list."""
     data = await _call_api("获取稍后再看列表", homepage.get_favorite_list_and_toview(credential))

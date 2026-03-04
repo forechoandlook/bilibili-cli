@@ -5,7 +5,7 @@ Usage:
     bili video <BV号或URL> [--subtitle] [--ai] [--comments] [--related] [--json]
     bili user <UID或用户名>          bili user-videos <UID> [--max N]
     bili search <关键词> [--type user|video] [--json]
-    bili hot / rank / feed / following / history / favorites
+    bili hot / rank / feed / following / history / watch-later / favorites
     bili like / coin / triple <BV号>
 """
 
@@ -49,6 +49,7 @@ cli.add_command(user_search.search)
 cli.add_command(collections.favorites)
 cli.add_command(collections.following)
 cli.add_command(collections.history)
+cli.add_command(collections.watch_later)
 cli.add_command(collections.feed)
 
 cli.add_command(discovery.hot_cmd)

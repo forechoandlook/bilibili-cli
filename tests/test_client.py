@@ -185,6 +185,21 @@ async def test_get_toview_by_name(mock_credential):
 
 
 @pytest.mark.asyncio
+async def test_get_watch_history_calls_user_api(mock_credential):
+    mock_data = {"list": [{"title": "watched"}]}
+    with patch("bili_cli.client.user.get_self_history", new_callable=AsyncMock, return_value=mock_data) as mock_history:
+        result = await client.get_watch_history(page=2, count=50, credential=mock_credential)
+        assert result == mock_data
+        mock_history.assert_awaited_once_with(page_num=2, per_page_item=50, credential=mock_credential)
+
+
+@pytest.mark.asyncio
+async def test_get_watch_history_requires_credential():
+    with pytest.raises(AuthenticationError):
+        await client.get_watch_history()
+
+
+@pytest.mark.asyncio
 async def test_get_toview_by_id(mock_credential):
     data = [
         {
