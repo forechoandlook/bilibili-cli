@@ -23,8 +23,8 @@ def _sanitize_filename(title: str) -> str:
 
 @click.command()
 @click.argument("bv_or_url")
-@click.option("--segment", "-s", default=30, type=click.IntRange(5, 300),
-              help="每段时长（秒），默认 30。设为 0 则不切分。")
+@click.option("--segment", "-s", default=25, type=click.IntRange(5, 300),
+              help="每段时长（秒），默认 25。设为 0 则不切分。")
 @click.option("--no-split", is_flag=True, help="不切分，直接保存完整音频文件。")
 @click.option("--output", "-o", default=None, type=click.Path(),
               help=f"输出目录（默认 {DEFAULT_TMP_DIR}/{{title}}/）。")
