@@ -4,7 +4,7 @@ Usage:
     bili login
     bili status
     bili video <BV号或URL> [--subtitle] [--json]
-    bili user <UID或用户名> [--count N] [--json]
+    bili user <UID或用户名> [--max N] [--json]
     bili search <关键词> [--json]
     bili favorites [收藏夹ID] [--page N] [--json]
 """
@@ -290,7 +290,7 @@ def video(bv_or_url: str, subtitle: bool, comments: bool, ai: bool, related: boo
 
 @cli.command()
 @click.argument("uid_or_name")
-@click.option("--count", "-n", default=10, help="显示的视频数量 (默认 10)。")
+@click.option("--max", "-n", "count", default=10, help="显示的视频数量 (默认 10)。")
 @click.option("--json", "as_json", is_flag=True, help="输出原始 JSON。")
 def user(uid_or_name: str, count: int, as_json: bool):
     """查看 UP 主信息和最新视频。
@@ -534,7 +534,7 @@ def favorites(fav_id: int | None, page: int, as_json: bool):
 
 
 @cli.command(name="hot")
-@click.option("--count", "-n", default=20, help="显示数量 (默认 20)。")
+@click.option("--max", "-n", "count", default=20, help="显示数量 (默认 20)。")
 @click.option("--json", "as_json", is_flag=True, help="输出原始 JSON。")
 def hot_cmd(count: int, as_json: bool):
     """查看热门视频。"""
