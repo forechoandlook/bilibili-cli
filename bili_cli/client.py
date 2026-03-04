@@ -426,3 +426,140 @@ async def triple_video(bvid: str, credential: Credential) -> dict[str, Any]:
     """Triple (like + coin + favorite) a video."""
     v = video.Video(bvid=bvid, credential=credential)
     return await _call_api("一键三连", v.triple())
+
+
+# ---------------------------------------------------------------------------
+# Audio extraction
+# ---------------------------------------------------------------------------
+
+_DOWNLOAD_HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36",
+    "Referer": "https://www.bilibili.com",
+}
+
+
+async def get_audio_url(bvid: str, credential: Credential | None = None) -> str:
+    """Get the best audio stream URL for a video (DASH preferred)."""
+    from bilibili_api.video import VideoDownloadURLDataDetecter, AudioQuality
+
+    v = video.Video(bvid=bvid, credential=credential)
+    download_data = await _call_api("获取下载地址", v.get_download_url(page_index=0))
+    detector = VideoDownloadURLDataDetecter(download_data)
+    streams = detector.detect_best_streams(
+        audio_max_quality=AudioQuality._64K,
+        no_dolby_audio=True,
+        no_hires=True,
+    )
+
+    if detector.check_flv_mp4_stream():
+        if streams and streams[0] and hasattr(streams[0], "url"):
+            return streams[0].url
+    else:
+        # DASH: audio is at index 1
+        if len(streams) >= 2 and streams[1] is not None and hasattr(streams[1], "url"):
+            return streams[1].url
+        # Fallback: find any stream with audio_quality
+        for s in streams:
+            if s is not None and hasattr(s, "audio_quality"):
+                return s.url
+
+    raise BiliError("无法获取音频流（可能是会员专属视频）")
+
+
+async def download_audio(audio_url: str, output_path: str) -> int:
+    """Download audio stream to a file. Returns bytes written."""
+    timeout = aiohttp.ClientTimeout(total=300)
+    max_retries = 3
+
+    for attempt in range(max_retries):
+        try:
+            async with aiohttp.ClientSession(timeout=timeout) as session:
+                async with session.get(audio_url, headers=_DOWNLOAD_HEADERS) as resp:
+                    if resp.status == 200:
+                        data = await resp.read()
+                        import os
+                        os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
+                        with open(output_path, "wb") as f:
+                            f.write(data)
+                        return len(data)
+                    if attempt < max_retries - 1:
+                        logger.warning("Download HTTP %d, retrying...", resp.status)
+                        await asyncio.sleep(2)
+                    else:
+                        raise NetworkError(f"音频下载失败: HTTP {resp.status}")
+        except (aiohttp.ClientError, asyncio.TimeoutError) as e:
+            if attempt < max_retries - 1:
+                logger.warning("Download error: %s, retrying...", e)
+                await asyncio.sleep(2)
+            else:
+                raise NetworkError(f"音频下载失败: {e}") from e
+
+    raise NetworkError("音频下载失败: 重试次数用尽")
+
+
+def split_audio(input_path: str, output_dir: str, segment_seconds: int = 30) -> list[str]:
+    """Split audio into WAV segments using PyAV.
+
+    Returns list of segment file paths.
+    Each segment is 16kHz mono PCM s16le WAV — ready for ASR APIs.
+    """
+    try:
+        import av as pyav
+    except ImportError:
+        raise BiliError(
+            "音频切分需要 PyAV 库。请安装: pip install av\n"
+            "或: uv add av"
+        )
+
+    import os
+    os.makedirs(output_dir, exist_ok=True)
+
+    input_container = pyav.open(input_path)
+    audio_stream = input_container.streams.audio[0]
+
+    # Decode all frames
+    all_frames = []
+    for frame in input_container.decode(audio=0):
+        all_frames.append(frame)
+    input_container.close()
+
+    if not all_frames:
+        raise BiliError("音频解码失败: 无帧数据")
+
+    sample_rate = all_frames[0].sample_rate
+    samples_per_segment = segment_seconds * sample_rate
+
+    def _write_segment(frames: list, seg_idx: int) -> str:
+        seg_path = os.path.join(output_dir, f"seg_{seg_idx:03d}.wav")
+        out = pyav.open(seg_path, "w", format="wav")
+        out_stream = out.add_stream("pcm_s16le", rate=16000, layout="mono")
+        resampler = pyav.AudioResampler(format="s16", layout="mono", rate=16000)
+        for fr in frames:
+            fr.pts = None
+            for resampled in resampler.resample(fr):
+                for pkt in out_stream.encode(resampled):
+                    out.mux(pkt)
+        for pkt in out_stream.encode():
+            out.mux(pkt)
+        out.close()
+        return seg_path
+
+    chunk_paths = []
+    current_samples = 0
+    segment_frames: list = []
+    seg_idx = 0
+
+    for frame in all_frames:
+        segment_frames.append(frame)
+        current_samples += frame.samples
+        if current_samples >= samples_per_segment:
+            chunk_paths.append(_write_segment(segment_frames, seg_idx))
+            seg_idx += 1
+            current_samples = 0
+            segment_frames = []
+
+    # Write remaining frames
+    if segment_frames:
+        chunk_paths.append(_write_segment(segment_frames, seg_idx))
+
+    return chunk_paths

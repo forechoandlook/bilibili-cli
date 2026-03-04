@@ -7,6 +7,7 @@ Usage:
     bili search <关键词> [--type user|video] [--json]
     bili hot / rank / feed / following / history / watch-later / favorites
     bili like / coin / triple <BV号>
+    bili audio <BV号> [--segment N] [--no-split] [-o DIR]
 """
 
 from __future__ import annotations
@@ -14,7 +15,7 @@ from __future__ import annotations
 import click
 
 from . import __version__
-from .commands import account, collections, common, discovery, interactions, user_search, video
+from .commands import account, audio, collections, common, discovery, interactions, user_search, video
 
 
 # Keep helper names for backward compatibility with tests/importers.
@@ -58,6 +59,8 @@ cli.add_command(discovery.rank_cmd)
 cli.add_command(interactions.like)
 cli.add_command(interactions.coin)
 cli.add_command(interactions.triple)
+
+cli.add_command(audio.audio)
 
 
 if __name__ == "__main__":

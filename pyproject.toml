@@ -23,12 +23,14 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+audio = ["av>=14.0"]
 dev = [
     "pytest>=8.0",
     "pytest-asyncio>=0.23",
     "pytest-mock>=3.0",
     "ruff>=0.11.0",
     "mypy>=1.15.0",
+    "av>=14.0",
 ]
 
 [project.urls]
