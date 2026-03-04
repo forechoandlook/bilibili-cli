@@ -1,12 +1,12 @@
 """CLI entry point for bilibili-cli.
 
 Usage:
-    bili login
-    bili status
-    bili video <BV号或URL> [--subtitle] [--json]
-    bili user <UID或用户名> [--max N] [--json]
-    bili search <关键词> [--json]
-    bili favorites [收藏夹ID] [--page N] [--json]
+    bili login / logout / status / whoami
+    bili video <BV号或URL> [--subtitle] [--ai] [--comments] [--related] [--json]
+    bili user <UID或用户名>          bili user-videos <UID> [--max N]
+    bili search <关键词> [--type user|video] [--json]
+    bili hot / rank / feed / following / history / favorites
+    bili like / coin / triple <BV号>
 """
 
 from __future__ import annotations
@@ -308,7 +308,7 @@ def _resolve_uid(uid_or_name: str, cred=None) -> int:
 @click.argument("uid_or_name")
 @click.option("--json", "as_json", is_flag=True, help="输出原始 JSON。")
 def user(uid_or_name: str, as_json: bool):
-    """Get user profile.
+    """查看 UP 主资料。
 
     UID_OR_NAME 可以是 UID（纯数字）或用户名（搜索第一个匹配）。
     """
@@ -350,7 +350,7 @@ def user(uid_or_name: str, as_json: bool):
 @click.option("--max", "-n", "count", default=10, help="显示的视频数量 (默认 10)。")
 @click.option("--json", "as_json", is_flag=True, help="输出原始 JSON。")
 def user_videos(uid_or_name: str, count: int, as_json: bool):
-    """List a user's published videos.
+    """查看 UP 主的视频列表。
 
     UID_OR_NAME 可以是 UID（纯数字）或用户名（搜索第一个匹配）。
     """
@@ -819,7 +819,7 @@ def _require_login():
 @click.argument("bv_or_url")
 @click.option("--undo", is_flag=True, help="取消点赞。")
 def like(bv_or_url: str, undo: bool):
-    """Like or unlike a video."""
+    """点赞视频。"""
     from . import client
 
     cred = _require_login()
@@ -839,7 +839,7 @@ def like(bv_or_url: str, undo: bool):
 @click.argument("bv_or_url")
 @click.option("--num", "-n", default=1, type=click.Choice(["1", "2"]), help="投币数量 (1 或 2)。")
 def coin(bv_or_url: str, num: str):
-    """Give coins to a video."""
+    """给视频投币。"""
     from . import client
 
     cred = _require_login()
@@ -855,7 +855,7 @@ def coin(bv_or_url: str, num: str):
 @cli.command()
 @click.argument("bv_or_url")
 def triple(bv_or_url: str):
-    """Triple a video (like + coin + favorite). 一键三连！"""
+    """一键三连（点赞 + 投币 + 收藏）。"""
     from . import client
 
     cred = _require_login()

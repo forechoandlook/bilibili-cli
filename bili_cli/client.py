@@ -11,7 +11,7 @@ import logging
 from typing import Any
 
 import aiohttp
-from bilibili_api import video, user, favorite_list, search, hot, rank, comment, dynamic, homepage
+from bilibili_api import video, user, favorite_list, search, hot, rank, comment, homepage
 from bilibili_api.utils.network import Credential
 
 logger = logging.getLogger(__name__)
@@ -312,8 +312,6 @@ async def get_dynamic_feed(
     offset: str = "", credential: Credential = None
 ) -> dict[str, Any]:
     """Fetch dynamic feed (动态时间线)."""
-    d = dynamic.Dynamic(dynamic_id=0, credential=credential)
-    # Use the new dynamics API
     me = await user.get_self_info(credential)
     uid = me["mid"]
     u = user.User(uid=uid, credential=credential)
