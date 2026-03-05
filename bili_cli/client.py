@@ -287,21 +287,45 @@ async def get_rank_videos(day: int = 3) -> dict[str, Any]:
 async def get_video_comments(
     bvid: str, page: int = 1, credential: Credential | None = None
 ) -> dict[str, Any]:
-    """Fetch video comments."""
+    """Fetch video comments.
+
+    Uses the direct Bilibili API endpoint instead of the bilibili-api-python
+    comment module, which has compatibility issues with the latest API.
+    """
     v = video.Video(bvid=bvid, credential=credential)
     info = await _call_api("获取视频信息", v.get_info())
     aid = info.get("aid")
     if aid is None:
         raise BiliError("获取视频评论: 视频信息缺少 aid")
-    return await _call_api(
-        "获取视频评论",
-        comment.get_comments(
-            oid=aid,
-            type_=comment.CommentResourceType.VIDEO,
-            page_index=page,
-            credential=credential,
-        ),
-    )
+
+    # Use direct API call instead of comment.get_comments to fix compatibility
+    api_url = f"https://api.bilibili.com/x/v2/reply"
+    params = {
+        "oid": aid,
+        "type": 1,
+        "pn": page,
+        "ps": 20,
+        "sort": 2,  # Sort by hot/popular
+    }
+
+    timeout = aiohttp.ClientTimeout(total=30)
+    async with aiohttp.ClientSession(timeout=timeout) as session:
+        try:
+            async with session.get(api_url, params=params, headers={
+                "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                "Referer": f"https://www.bilibili.com/video/{bvid}/",
+                "Accept": "application/json, text/plain, */*",
+                "Accept-Language": "zh-CN,zh;q=0.9",
+            }) as resp:
+                resp.raise_for_status()
+                data = await resp.json()
+
+                if data.get("code") != 0:
+                    raise BiliError(f"获取视频评论: [{data.get('code')}] {data.get('message', 'Unknown error')}")
+
+                return data["data"]
+        except (aiohttp.ClientError, asyncio.TimeoutError) as e:
+            raise NetworkError(f"获取视频评论失败: {e}") from e
 
 
 async def get_video_ai_conclusion(
