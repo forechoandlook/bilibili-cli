@@ -36,6 +36,76 @@ async def test_get_video_info_maps_auth_exception():
 
 
 @pytest.mark.asyncio
+async def test_get_video_comments_prefers_sdk_like_order_when_non_empty():
+    sdk_result = {"replies": [{"rpid": 1}]}
+    with patch("bili_cli.client.video.Video") as MockVideo, \
+         patch("bili_cli.client.comment.get_comments", new_callable=AsyncMock, return_value=sdk_result) as mock_sdk, \
+         patch("bili_cli.client._get_video_comments_direct", new_callable=AsyncMock) as mock_direct:
+        MockVideo.return_value.get_info = AsyncMock(return_value={"aid": 123})
+        result = await client.get_video_comments("BV1test123", page=2)
+        assert result == sdk_result
+        mock_sdk.assert_awaited_once_with(
+            oid=123,
+            type_=client.comment.CommentResourceType.VIDEO,
+            page_index=2,
+            order=client.comment.OrderType.LIKE,
+            credential=None,
+        )
+        mock_direct.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_get_video_comments_falls_back_to_direct_when_sdk_empty():
+    sdk_result = {"replies": []}
+    direct_result = {"replies": [{"rpid": 2}]}
+    with patch("bili_cli.client.video.Video") as MockVideo, \
+         patch("bili_cli.client.comment.get_comments", new_callable=AsyncMock, return_value=sdk_result), \
+         patch(
+             "bili_cli.client._get_video_comments_direct",
+             new_callable=AsyncMock,
+             return_value=direct_result,
+         ) as mock_direct:
+        MockVideo.return_value.get_info = AsyncMock(return_value={"aid": 456})
+        result = await client.get_video_comments("BV1test123")
+        assert result == direct_result
+        mock_direct.assert_awaited_once_with(aid=456, bvid="BV1test123", page=1, credential=None)
+
+
+@pytest.mark.asyncio
+async def test_get_video_comments_returns_sdk_result_if_direct_fallback_fails():
+    sdk_result = {"replies": []}
+    with patch("bili_cli.client.video.Video") as MockVideo, \
+         patch("bili_cli.client.comment.get_comments", new_callable=AsyncMock, return_value=sdk_result), \
+         patch(
+             "bili_cli.client._get_video_comments_direct",
+             new_callable=AsyncMock,
+             side_effect=NetworkException(-1, "timeout"),
+         ):
+        MockVideo.return_value.get_info = AsyncMock(return_value={"aid": 789})
+        result = await client.get_video_comments("BV1test123")
+        assert result == sdk_result
+
+
+@pytest.mark.asyncio
+async def test_get_video_comments_uses_direct_when_sdk_errors():
+    direct_result = {"replies": [{"rpid": 3}]}
+    with patch("bili_cli.client.video.Video") as MockVideo, \
+         patch(
+             "bili_cli.client.comment.get_comments",
+             new_callable=AsyncMock,
+             side_effect=NetworkException(-1, "sdk down"),
+         ), \
+         patch(
+             "bili_cli.client._get_video_comments_direct",
+             new_callable=AsyncMock,
+             return_value=direct_result,
+         ):
+        MockVideo.return_value.get_info = AsyncMock(return_value={"aid": 321})
+        result = await client.get_video_comments("BV1test123")
+        assert result == direct_result
+
+
+@pytest.mark.asyncio
 async def test_get_user_info(mock_user_info):
     with patch("bili_cli.client.user.User") as MockUser:
         MockUser.return_value.get_user_info = AsyncMock(return_value=mock_user_info)

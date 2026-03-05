@@ -284,48 +284,94 @@ async def get_rank_videos(day: int = 3) -> dict[str, Any]:
 # ---------------------------------------------------------------------------
 
 
+async def _get_video_comments_direct(
+    aid: int,
+    bvid: str,
+    page: int,
+    credential: Credential | None = None,
+) -> dict[str, Any]:
+    """Fallback direct API call for video comments when SDK returns empty."""
+    api_url = "https://api.bilibili.com/x/v2/reply"
+    params = {
+        "oid": aid,
+        "type": 1,
+        "pn": page,
+        "ps": 20,
+        "sort": 2,  # hot/popular
+    }
+    headers = {
+        "User-Agent": (
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/120.0.0.0 Safari/537.36"
+        ),
+        "Referer": f"https://www.bilibili.com/video/{bvid}/",
+        "Accept": "application/json, text/plain, */*",
+        "Accept-Language": "zh-CN,zh;q=0.9",
+    }
+    if credential and credential.sessdata:
+        cookies = [f"SESSDATA={credential.sessdata}"]
+        if credential.bili_jct:
+            cookies.append(f"bili_jct={credential.bili_jct}")
+        headers["Cookie"] = "; ".join(cookies)
+
+    timeout = aiohttp.ClientTimeout(total=30)
+    async with aiohttp.ClientSession(timeout=timeout) as session:
+        async with session.get(api_url, params=params, headers=headers) as resp:
+            resp.raise_for_status()
+            payload = await resp.json()
+    if payload.get("code") != 0:
+        raise BiliError(
+            f"获取视频评论: [{payload.get('code')}] {payload.get('message', 'Unknown error')}"
+        )
+    data = payload.get("data")
+    return data if isinstance(data, dict) else {}
+
+
 async def get_video_comments(
     bvid: str, page: int = 1, credential: Credential | None = None
 ) -> dict[str, Any]:
-    """Fetch video comments.
-
-    Uses the direct Bilibili API endpoint instead of the bilibili-api-python
-    comment module, which has compatibility issues with the latest API.
-    """
+    """Fetch video comments with SDK-first + direct-API fallback strategy."""
     v = video.Video(bvid=bvid, credential=credential)
     info = await _call_api("获取视频信息", v.get_info())
     aid = info.get("aid")
     if aid is None:
         raise BiliError("获取视频评论: 视频信息缺少 aid")
 
-    # Use direct API call instead of comment.get_comments to fix compatibility
-    api_url = f"https://api.bilibili.com/x/v2/reply"
-    params = {
-        "oid": aid,
-        "type": 1,
-        "pn": page,
-        "ps": 20,
-        "sort": 2,  # Sort by hot/popular
-    }
+    sdk_result: dict[str, Any] | None = None
+    try:
+        sdk_result = await _call_api(
+            "获取视频评论",
+            comment.get_comments(
+                oid=aid,
+                type_=comment.CommentResourceType.VIDEO,
+                page_index=page,
+                order=comment.OrderType.LIKE,
+                credential=credential,
+            ),
+        )
+    except BiliError as exc:
+        logger.warning("SDK comment fetch failed, fallback to direct API: %s", exc)
 
-    timeout = aiohttp.ClientTimeout(total=30)
-    async with aiohttp.ClientSession(timeout=timeout) as session:
-        try:
-            async with session.get(api_url, params=params, headers={
-                "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-                "Referer": f"https://www.bilibili.com/video/{bvid}/",
-                "Accept": "application/json, text/plain, */*",
-                "Accept-Language": "zh-CN,zh;q=0.9",
-            }) as resp:
-                resp.raise_for_status()
-                data = await resp.json()
+    if isinstance(sdk_result, dict) and sdk_result.get("replies"):
+        return sdk_result
 
-                if data.get("code") != 0:
-                    raise BiliError(f"获取视频评论: [{data.get('code')}] {data.get('message', 'Unknown error')}")
+    try:
+        direct_result = await _call_api(
+            "获取视频评论",
+            _get_video_comments_direct(aid=aid, bvid=bvid, page=page, credential=credential),
+        )
+        if isinstance(direct_result, dict):
+            return direct_result
+    except BiliError as exc:
+        if isinstance(sdk_result, dict):
+            logger.warning("Direct comment fallback failed, return SDK result: %s", exc)
+            return sdk_result
+        raise
 
-                return data["data"]
-        except (aiohttp.ClientError, asyncio.TimeoutError) as e:
-            raise NetworkError(f"获取视频评论失败: {e}") from e
+    if isinstance(sdk_result, dict):
+        return sdk_result
+    return {}
 
 
 async def get_video_ai_conclusion(
