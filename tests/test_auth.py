@@ -10,7 +10,10 @@ from bilibili_api.utils.network import Credential
 
 from bili_cli.auth import (
     _extract_browser_credential,
+    _get_qr_terminal_output,
     _load_saved_credential,
+    _render_compact_qr,
+    _supports_unicode_half_blocks,
     _validate_credential,
     clear_credential,
     get_credential,
@@ -192,3 +195,69 @@ def test_extract_browser_credential_empty_output_returns_none():
     fake = SimpleNamespace(returncode=0, stdout="   ", stderr="")
     with patch("bili_cli.auth.subprocess.run", return_value=fake):
         assert _extract_browser_credential() is None
+
+
+def test_render_compact_qr_returns_multiline_text():
+    with patch("bili_cli.auth.shutil.get_terminal_size", return_value=SimpleNamespace(columns=200, lines=24)):
+        rendered = _render_compact_qr("https://example.com")
+    assert rendered is not None
+    assert "\n" in rendered
+    assert any(ch in rendered for ch in "▀▄█")
+
+
+def test_render_compact_qr_returns_none_when_terminal_too_narrow():
+    with patch("bili_cli.auth.shutil.get_terminal_size", return_value=SimpleNamespace(columns=1, lines=24)):
+        assert _render_compact_qr("https://example.com") is None
+
+
+def test_supports_unicode_half_blocks_with_utf8():
+    with patch("bili_cli.auth.sys.stdout", SimpleNamespace(encoding="utf-8")):
+        assert _supports_unicode_half_blocks() is True
+
+
+def test_supports_unicode_half_blocks_with_non_unicode_encoding():
+    with patch("bili_cli.auth.sys.stdout", SimpleNamespace(encoding="cp1252")):
+        assert _supports_unicode_half_blocks() is False
+
+
+def test_get_qr_terminal_output_falls_back_when_private_qr_link_missing():
+    class DummyLogin:
+        def get_qrcode_terminal(self):
+            return "DEFAULT_QR"
+
+    assert _get_qr_terminal_output(DummyLogin()) == "DEFAULT_QR"
+
+
+def test_get_qr_terminal_output_falls_back_when_unicode_not_supported():
+    class DummyLogin:
+        _QrCodeLogin__qr_link = "https://example.com"
+
+        def get_qrcode_terminal(self):
+            return "DEFAULT_QR"
+
+    with patch("bili_cli.auth._supports_unicode_half_blocks", return_value=False):
+        assert _get_qr_terminal_output(DummyLogin()) == "DEFAULT_QR"
+
+
+def test_get_qr_terminal_output_falls_back_when_compact_render_returns_none():
+    class DummyLogin:
+        _QrCodeLogin__qr_link = "https://example.com"
+
+        def get_qrcode_terminal(self):
+            return "DEFAULT_QR"
+
+    with patch("bili_cli.auth._supports_unicode_half_blocks", return_value=True), \
+         patch("bili_cli.auth._render_compact_qr", return_value=None):
+        assert _get_qr_terminal_output(DummyLogin()) == "DEFAULT_QR"
+
+
+def test_get_qr_terminal_output_prefers_compact_rendering_when_available():
+    class DummyLogin:
+        _QrCodeLogin__qr_link = "https://example.com"
+
+        def get_qrcode_terminal(self):
+            return "DEFAULT_QR"
+
+    with patch("bili_cli.auth._supports_unicode_half_blocks", return_value=True), \
+         patch("bili_cli.auth._render_compact_qr", return_value="COMPACT_QR"):
+        assert _get_qr_terminal_output(DummyLogin()) == "COMPACT_QR"

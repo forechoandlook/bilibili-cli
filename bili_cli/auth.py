@@ -249,7 +249,19 @@ def clear_credential():
         logger.info("Credential removed: %s", CREDENTIAL_FILE)
 
 
-def _render_compact_qr(data: str) -> str:
+def _supports_unicode_half_blocks() -> bool:
+    """Return True when stdout encoding can represent half-block glyphs."""
+    encoding = getattr(sys.stdout, "encoding", None)
+    if not encoding:
+        return False
+    try:
+        "▀▄█".encode(encoding)
+    except (LookupError, UnicodeEncodeError):
+        return False
+    return True
+
+
+def _render_compact_qr(data: str) -> str | None:
     """Render a compact QR code using Unicode half-block characters.
 
     Uses ▀, ▄, █, and space to encode two vertical modules per character row,
@@ -275,10 +287,12 @@ def _render_compact_qr(data: str) -> str:
     term_cols = shutil.get_terminal_size(fallback=(80, 24)).columns
     qr_width = len(matrix[0])
     if qr_width > term_cols:
-        return (
-            f"⚠️  终端宽度 ({term_cols}) 不足以显示二维码 ({qr_width})，"
-            "请放大终端窗口或缩小字体后重试。"
+        logger.warning(
+            "Terminal width (%d) too narrow for compact QR (%d), falling back",
+            term_cols,
+            qr_width,
         )
+        return None
 
     lines: list[str] = []
     # Process two rows at a time using half-block characters
@@ -305,6 +319,25 @@ def _render_compact_qr(data: str) -> str:
     return "\n".join(lines)
 
 
+def _get_qr_terminal_output(login: QrCodeLogin) -> str:
+    """Choose compact QR rendering when possible, otherwise use default output."""
+    default_qr = login.get_qrcode_terminal()
+
+    qr_link = getattr(login, "_QrCodeLogin__qr_link", None)
+    if not qr_link:
+        logger.warning("QR link unavailable from QrCodeLogin internals, using default renderer")
+        return default_qr
+
+    if not _supports_unicode_half_blocks():
+        logger.warning("stdout encoding cannot render Unicode QR blocks, using default renderer")
+        return default_qr
+
+    compact_qr = _render_compact_qr(qr_link)
+    if compact_qr is None:
+        return default_qr
+    return compact_qr
+
+
 async def qr_login() -> Credential:
     """QR code login via terminal.
 
@@ -314,12 +347,9 @@ async def qr_login() -> Credential:
     login = QrCodeLogin()
     await login.generate_qrcode()
 
-    # Extract QR link and render compact version
-    qr_link = login._QrCodeLogin__qr_link  # access private attr for custom rendering
-
     # Display QR code in terminal
     print("\n📱 请使用 Bilibili App 扫描以下二维码登录:\n")
-    print(_render_compact_qr(qr_link))
+    print(_get_qr_terminal_output(login))
     print("\n⭐ 扫码后请在手机上确认登录...")
 
     # Poll login state
