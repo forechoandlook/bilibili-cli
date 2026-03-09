@@ -305,6 +305,7 @@ async def _get_video_comments_direct(
             "AppleWebKit/537.36 (KHTML, like Gecko) "
             "Chrome/133.0.0.0 Safari/537.36"
         ),
+        "Origin": "https://www.bilibili.com",
         "Referer": f"https://www.bilibili.com/video/{bvid}/",
         "Accept": "application/json, text/plain, */*",
         "Accept-Language": "zh-CN,zh;q=0.9",
