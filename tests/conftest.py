@@ -1,8 +1,11 @@
 """Shared test fixtures."""
 
+import os
 
 import pytest
 from bilibili_api.utils.network import Credential
+
+os.environ.setdefault("OUTPUT", "rich")
 
 
 @pytest.fixture

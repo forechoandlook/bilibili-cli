@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import os
 import sys
 from typing import NoReturn
 
@@ -17,6 +18,7 @@ from ..exceptions import BiliError, InvalidBvidError
 
 console = Console(stderr=True)
 OutputFormat = str | None
+_OUTPUT_ENV = "OUTPUT"
 
 
 def setup_logging(verbose: bool):
@@ -38,6 +40,15 @@ def resolve_output_format(*, as_json: bool = False, as_yaml: bool = False) -> Ou
         return "yaml"
     if as_json:
         return "json"
+    output_mode = os.getenv(_OUTPUT_ENV, "auto").strip().lower()
+    if output_mode == "yaml":
+        return "yaml"
+    if output_mode == "json":
+        return "json"
+    if output_mode == "rich":
+        return None
+    if not sys.stdout.isatty():
+        return "yaml"
     return None
 
 

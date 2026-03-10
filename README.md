@@ -28,6 +28,7 @@ A CLI for Bilibili — browse videos, users, favorites from the terminal 📺
 - 👍 **Interactions** — like, coin, triple (一键三连)
 - 🔐 **Smart auth** — auto-extracts cookies from Chrome/Firefox, or QR code login
 - 📊 **Structured output** — major query commands support `--yaml` and `--json`
+- 🤖 **Agent-friendly defaults** — non-TTY stdout defaults to YAML; override with `OUTPUT=yaml|json|rich|auto`
 
 ## Installation
 
@@ -65,8 +66,10 @@ uv run mypy bili_cli
 ```bash
 # Login & account
 bili status                    # Check login status
+bili status --yaml             # Structured auth status
 bili login                     # QR code login
 bili whoami                    # Detailed profile (level, coins, followers)
+bili whoami --yaml             # Structured profile
 
 # Videos
 bili video BV1ABcsztEcY                 # Video details
@@ -144,10 +147,13 @@ If an AI agent needs machine-readable output, prefer `--yaml` first:
 - `--yaml` is usually more token-efficient than pretty-printed JSON
 - It is still easy to parse for agents and scripts
 - Keep `--json` for `jq`, strict JSON-only tooling, or exact downstream schemas
+- Non-TTY stdout defaults to YAML automatically
+- Use `OUTPUT=yaml|json|rich|auto` to override the default mode
 
 Examples:
 
 ```bash
+bili status --yaml
 bili video BV1ABcsztEcY --yaml
 bili hot --max 5 --yaml
 bili user-videos 946974 --max 3 --yaml
@@ -202,6 +208,7 @@ All bilibili-cli commands are available in OpenClaw after installation.
 - 👍 **互动** — 点赞、投币、一键三连
 - 🔐 **智能认证** — 自动提取浏览器 Cookie，或扫码登录
 - 📊 **结构化输出** — 主要查询命令支持 `--yaml` 和 `--json`
+- 🤖 **更适合 Agent** — stdout 不是 TTY 时默认输出 YAML，也可以用 `OUTPUT=yaml|json|rich|auto` 覆盖
 
 ## 安装
 
@@ -231,8 +238,10 @@ uv sync
 ```bash
 # 登录与账号
 bili status                    # 检查登录状态
+bili status --yaml             # 结构化认证状态
 bili login                     # 扫码登录
 bili whoami                    # 查看个人信息（等级、硬币、粉丝数）
+bili whoami --yaml             # 结构化个人信息
 
 # 视频
 bili video BV1ABcsztEcY                 # 视频详情
@@ -302,10 +311,13 @@ bilibili-cli 采用三级认证策略：
 - `--yaml` 通常比格式化 JSON 更省 token
 - 对 agent 来说仍然容易解析
 - 只有在要配合 `jq` 或下游必须是 JSON 时，再使用 `--json`
+- stdout 不是 TTY 时会默认自动输出 YAML
+- 也可以用 `OUTPUT=yaml|json|rich|auto` 强制覆盖默认输出模式
 
 示例：
 
 ```bash
+bili status --yaml
 bili video BV1ABcsztEcY --yaml
 bili hot --max 5 --yaml
 bili user-videos 946974 --max 3 --yaml

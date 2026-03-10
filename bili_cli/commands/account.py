@@ -27,13 +27,25 @@ def logout():
 
 
 @click.command()
-def status():
+@click.option("--json", "as_json", is_flag=True, help="输出 JSON。")
+@click.option("--yaml", "as_yaml", is_flag=True, help="输出 YAML，推荐给 AI Agent。")
+def status(as_json: bool, as_yaml: bool):
     """检查登录状态。"""
+    output_format = common.resolve_output_format(as_json=as_json, as_yaml=as_yaml)
     cred = common.require_login(message="未登录。使用 [bold]bili login[/bold] 登录。")
 
     from .. import client
 
     info = common.run_or_exit(client.get_self_info(cred), "检查登录状态失败")
+    payload = {
+        "authenticated": True,
+        "user": {
+            "uid": info.get("mid", "unknown"),
+            "name": info.get("name", "unknown"),
+        },
+    }
+    if common.emit_structured(payload, output_format):
+        return
     name = info.get("name", "unknown")
     uid = info.get("mid", "unknown")
     common.console.print(f"[green]✅ 已登录：[bold]{name}[/bold]  (UID: {uid})[/green]")

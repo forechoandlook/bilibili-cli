@@ -147,6 +147,7 @@ bili unfollow 946974           # Unfollow by UID
 
 ```bash
 bili status                    # Quick login check
+bili status --yaml             # Structured auth status
 bili whoami                    # Detailed profile info
 bili whoami --yaml              # Profile as YAML
 bili whoami --json              # Profile as JSON
@@ -159,10 +160,14 @@ bili logout                    # Clear credentials
 Major query commands support both `--yaml` and `--json` for machine-readable output. Prefer YAML for agent use:
 
 ```bash
+bili status --yaml                                # Quick structured auth check
 bili video BV1ABcsztEcY --yaml                       # Preferred for AI agents
 bili hot --max 5 --yaml                             # Smaller, token-efficient payload
 bili user 946974 --json | jq '.user_info.name'      # JSON when jq is needed
 ```
+
+When stdout is not a TTY, `bilibili-cli` defaults to YAML automatically.
+Use `OUTPUT=yaml|json|rich|auto` to override the default output mode.
 
 ## Debugging
 

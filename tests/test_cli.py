@@ -38,6 +38,18 @@ def test_status_logged_in(runner, mock_user_info):
         assert "✅" in result.output
 
 
+def test_status_auto_yaml_when_stdout_is_not_tty(runner, mock_user_info, monkeypatch):
+    monkeypatch.setenv("OUTPUT", "auto")
+    mock_cred = MagicMock()
+    with patch("bili_cli.commands.common.get_credential", return_value=mock_cred), \
+         patch("bili_cli.client.get_self_info", new_callable=AsyncMock, return_value=mock_user_info):
+        result = runner.invoke(cli, ["status"])
+        assert result.exit_code == 0
+        data = _load_yaml(result.output)
+        assert data["authenticated"] is True
+        assert data["user"]["name"] == "TestUP"
+
+
 def test_logout(runner):
     with patch("bili_cli.commands.common.clear_credential") as mock_clear:
         result = runner.invoke(cli, ["logout"])
