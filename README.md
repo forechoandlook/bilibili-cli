@@ -146,6 +146,8 @@ bili user-videos 946974 --max 3 --yaml
 
 For agent usage, also prefer narrower queries (`--max`, `--page`, `--offset`) to avoid wasting context on oversized payloads.
 
+When an AI agent is asked to summarize a video, it should fetch subtitles first. Subtitles usually contain the core content of the video and are the best primary source for summarization. Only fall back to AI summary, comments, or audio extraction when subtitles are unavailable or insufficient.
+
 ### Claude Code / Antigravity
 
 ```bash
@@ -297,6 +299,8 @@ bili user-videos 946974 --max 3 --yaml
 ```
 
 另外，agent 应尽量配合 `--max`、`--page`、`--offset` 缩小结果集，避免把不必要的数据带进上下文。
+
+如果 agent 要帮用户总结视频，应该优先拉字幕。字幕通常就是视频核心内容的第一手来源，最适合做 summary；只有在没有字幕或字幕明显不足时，再退回到 AI summary、评论或音频提取。
 
 音频提取功能需要安装可选依赖组 `audio`（即 `av`）。
 

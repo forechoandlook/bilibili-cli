@@ -24,6 +24,8 @@ When you need machine-readable output:
 2. Use `--json` only when downstream tooling strictly requires JSON.
 3. Keep result sets small with `--max`, `--page`, or `--offset`.
 4. Prefer specific commands over broad ones. Example: use `bili user-videos 946974 --max 3 --yaml` instead of fetching large timelines.
+5. When summarizing a video, fetch subtitles first. Subtitles usually contain the video's core content and are the best primary source for summaries.
+6. Only fall back to `--ai`, comments, or audio extraction when subtitles are unavailable or clearly insufficient.
 
 ## Prerequisites
 
@@ -169,10 +171,10 @@ bili -v <command>              # Enable verbose/debug logging for any command
 ## Common Patterns for AI Agents
 
 ```bash
-# Get a video's subtitle text for summarization
+# For video summarization, fetch subtitles first
 bili video BV1ABcsztEcY --subtitle
 
-# Get AI-generated summary of a video
+# Only use AI summary as a fallback or secondary signal
 bili video BV1ABcsztEcY --ai
 
 # Get comments for sentiment analysis
@@ -198,13 +200,16 @@ bili search "topic" --type video --max 3 --yaml
 # 1. Search for a topic
 bili search "AI" --type video --max 5
 
-# 2. Get video details + subtitle
+# 2. Get subtitles first for summarization
 bili video BV1xxx --subtitle
 
-# 3. If no subtitle, extract audio for ASR
+# 3. If subtitles are missing or incomplete, try AI summary
+bili video BV1xxx --ai
+
+# 4. If there is still not enough content, extract audio for ASR
 bili audio BV1xxx --segment 25
 
-# 4. Get comments for audience reaction
+# 5. Get comments for audience reaction
 bili video BV1xxx --comments
 ```
 
