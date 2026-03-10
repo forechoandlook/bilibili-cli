@@ -66,3 +66,11 @@ ignore_missing_imports = true
 check_untyped_defs = true
 warn_unused_ignores = true
 no_implicit_optional = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+addopts = "-m 'not smoke'"
+markers = [
+    "smoke: real-API integration tests (run with: pytest -m smoke)",
+]

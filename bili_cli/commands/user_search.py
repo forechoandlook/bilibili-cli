@@ -8,6 +8,7 @@ import click
 from rich.panel import Panel
 from rich.table import Table
 
+from .. import payloads
 from . import common
 
 
@@ -20,16 +21,16 @@ def _resolve_uid(uid_or_name: str) -> int:
 
     results = common.run_or_exit(client.search_user(uid_or_name), "搜索用户失败")
     if not results:
-        common.exit_error(f"未找到用户: {uid_or_name}")
+        common.exit_error(f"未找到用户: {uid_or_name}", code="not_found")
 
     uid_raw = results[0].get("mid")
     if uid_raw is None:
-        common.exit_error(f"搜索结果缺少 UID: {uid_or_name}")
+        common.exit_error(f"搜索结果缺少 UID: {uid_or_name}", code="upstream_error")
 
     try:
         uid = int(uid_raw)
     except (TypeError, ValueError):
-        common.exit_error(f"搜索结果 UID 非法: {uid_raw}")
+        common.exit_error(f"搜索结果 UID 非法: {uid_raw}", code="upstream_error")
 
     common.console.print(f"[dim]🔍 匹配到: {results[0].get('uname', '')} (UID: {uid})[/dim]\n")
     return uid
@@ -74,7 +75,11 @@ def user(uid_or_name: str, as_json: bool, as_yaml: bool):
         "获取用户信息失败",
     )
 
-    if common.emit_structured({"user_info": info, "relation": relation}, output_format):
+    structured = {
+        "user": payloads.normalize_user(info),
+        "relation": payloads.normalize_relation(relation),
+    }
+    if common.emit_structured(structured, output_format):
         return
 
     follower = relation.get("follower", 0)
@@ -115,7 +120,7 @@ def user_videos(uid_or_name: str, count: int, as_json: bool, as_yaml: bool):
         "获取视频列表失败",
     )
 
-    if common.emit_structured(videos, output_format):
+    if common.emit_structured([payloads.normalize_video_summary(video) for video in videos], output_format):
         return
 
     if not videos:
@@ -158,7 +163,7 @@ def search(keyword: str, search_type: str, page: int, count: int, as_json: bool,
     if search_type == "video":
         results = common.run_or_exit(client.search_video(keyword, page=page), "搜索视频失败")
 
-        if common.emit_structured(results, output_format):
+        if common.emit_structured([payloads.normalize_search_video(item) for item in results[:count]], output_format):
             return
 
         display_results = [v for v in results if v.get("bvid")]
@@ -189,7 +194,7 @@ def search(keyword: str, search_type: str, page: int, count: int, as_json: bool,
     else:
         results = common.run_or_exit(client.search_user(keyword, page=page), "搜索用户失败")
 
-        if common.emit_structured(results, output_format):
+        if common.emit_structured([payloads.normalize_search_user(item) for item in results[:count]], output_format):
             return
 
         if not results:

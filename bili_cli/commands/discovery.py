@@ -5,6 +5,7 @@ from __future__ import annotations
 import click
 from rich.table import Table
 
+from .. import payloads
 from . import common
 
 
@@ -21,7 +22,14 @@ def hot_cmd(page: int, count: int, as_json: bool, as_yaml: bool):
 
     data = common.run_or_exit(client.get_hot_videos(pn=page, ps=count), "获取热门视频失败")
 
-    if common.emit_structured(data, output_format):
+    if common.emit_structured(
+        {
+            "items": [payloads.normalize_video_summary(item) for item in (data.get("list") or [])[:count]],
+            "page": page,
+            "count": count,
+        },
+        output_format,
+    ):
         return
 
     vlist = data.get("list") or []
@@ -65,7 +73,14 @@ def rank_cmd(day: str, count: int, as_json: bool, as_yaml: bool):
 
     data = common.run_or_exit(client.get_rank_videos(day=int(day)), "获取排行榜失败")
 
-    if common.emit_structured(data, output_format):
+    if common.emit_structured(
+        {
+            "items": [payloads.normalize_video_summary(item) for item in (data.get("list") or [])[:count]],
+            "day": int(day),
+            "count": count,
+        },
+        output_format,
+    ):
         return
 
     vlist = data.get("list") or []

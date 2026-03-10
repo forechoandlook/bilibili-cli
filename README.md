@@ -30,6 +30,7 @@ A CLI for Bilibili — browse videos, users, favorites from the terminal 📺
 - 📊 **Structured output** — major query commands support `--yaml` and `--json`
 - 🤖 **Agent-friendly defaults** — non-TTY stdout defaults to YAML; override with `OUTPUT=yaml|json|rich|auto`
 - 📦 **Stable envelope** — see [SCHEMA.md](./SCHEMA.md) for `ok/schema_version/data/error`
+- 🧱 **Normalized payloads** — command-layer output is normalized instead of leaking raw upstream SDK responses
 
 ## Installation
 
@@ -57,9 +58,16 @@ uv sync
 Run tests in the project environment:
 
 ```bash
+uv sync --extra dev
 uv run pytest -q
 uv run ruff check .
-uv run mypy bili_cli
+uv run python -m mypy bili_cli
+```
+
+If the project directory was moved and stale virtualenv wrappers remain, rerun:
+
+```bash
+uv sync --extra dev --reinstall
 ```
 
 ## Usage
@@ -81,7 +89,8 @@ bili video BV1ABcsztEcY --ai            # AI summary
 bili video BV1ABcsztEcY --comments      # Top comments
 bili video BV1ABcsztEcY --related       # Related videos
 bili video BV1ABcsztEcY --yaml          # Agent-friendly YAML
-bili video BV1ABcsztEcY --json          # Structured JSON envelope
+bili video BV1ABcsztEcY --json          # Normalized JSON envelope
+bili video BV1ABcsztEcY --subtitle-timeline --comments --json  # Extras in one payload
 
 # Users
 bili user 946974                        # UP profile
@@ -120,6 +129,8 @@ bili like BV1ABcsztEcY                  # Like
 bili coin BV1ABcsztEcY                  # Give coin
 bili triple BV1ABcsztEcY                # 一键三连 🎉
 bili unfollow 946974                    # Unfollow by UID
+bili like BV1ABcsztEcY --json           # Structured write result
+bili coin BV1ABcsztEcY --yaml           # Structured write result
 ```
 
 ## Authentication
@@ -136,6 +147,18 @@ Credentials are validated on use for authenticated commands. Expired cookies are
 Most commands work without login. Subtitles, favorites/following/watch-later/history, feed, my-dynamics, and interactions require authentication. Write actions (like/coin/triple/unfollow/dynamic-post/dynamic-delete) require write-capable credential (`bili_jct`).
 
 Audio extraction requires the optional `audio` dependency group (`av`).
+
+## Structured Output
+
+All `--json` / `--yaml` output uses the shared envelope from [SCHEMA.md](./SCHEMA.md).
+Major commands now emit normalized payloads instead of raw upstream SDK blobs:
+
+- `bili video` → `data.video`, `data.subtitle`, `data.ai_summary`, `data.comments`, `data.related`, `data.warnings`
+- `bili hot` / `bili rank` → `data.items`
+- `bili search` → normalized user/video lists
+- `bili like` / `bili coin` / `bili triple` / `bili unfollow` → normalized write-action results
+
+Structured errors now use more specific codes such as `not_authenticated`, `permission_denied`, `invalid_input`, `network_error`, `upstream_error`, and `not_found`.
 
 ## Use as AI Agent Skill
 
@@ -210,6 +233,7 @@ All bilibili-cli commands are available in OpenClaw after installation.
 - 🔐 **智能认证** — 自动提取浏览器 Cookie，或扫码登录
 - 📊 **结构化输出** — 主要查询命令支持 `--yaml` 和 `--json`
 - 🤖 **更适合 Agent** — stdout 不是 TTY 时默认输出 YAML，也可以用 `OUTPUT=yaml|json|rich|auto` 覆盖
+- 🧱 **规范化 payload** — 结构化输出在命令层做了收口，不再直接暴露原始上游 SDK 返回
 
 ## 安装
 
@@ -234,6 +258,21 @@ cd bilibili-cli
 uv sync
 ```
 
+开发环境验证：
+
+```bash
+uv sync --extra dev
+uv run pytest -q
+uv run ruff check .
+uv run python -m mypy bili_cli
+```
+
+如果项目目录发生过移动，导致旧的 virtualenv wrapper 失效，可重新执行：
+
+```bash
+uv sync --extra dev --reinstall
+```
+
 ## 使用示例
 
 ```bash
@@ -253,7 +292,8 @@ bili video BV1ABcsztEcY --ai            # AI 总结
 bili video BV1ABcsztEcY --comments      # 热门评论
 bili video BV1ABcsztEcY --related       # 相关推荐
 bili video BV1ABcsztEcY --yaml          # 适合 AI Agent 的 YAML
-bili video BV1ABcsztEcY --json          # 原始 JSON
+bili video BV1ABcsztEcY --json          # 规范化 JSON envelope
+bili video BV1ABcsztEcY --subtitle-timeline --comments --json  # 额外内容也会进入 payload
 
 # 用户
 bili user 946974                        # UP 主资料
@@ -291,6 +331,8 @@ bili like BV1ABcsztEcY                  # 点赞
 bili coin BV1ABcsztEcY                  # 投币
 bili triple BV1ABcsztEcY                # 一键三连 🎉
 bili unfollow 946974                    # 取消关注（按 UID）
+bili like BV1ABcsztEcY --json           # 结构化写操作结果
+bili coin BV1ABcsztEcY --yaml           # 结构化写操作结果
 ```
 
 ## 认证策略
@@ -304,6 +346,18 @@ bilibili-cli 采用三级认证策略：
 需要认证的命令会自动校验凭证。过期 Cookie 会自动清除；如果只是临时网络异常，不会误清本地凭证（会以 best-effort 继续尝试）。
 
 大部分命令无需登录。字幕、收藏夹、动态和互动操作需要登录。写操作（like/coin/triple/unfollow/dynamic-post/dynamic-delete）需要可写凭证（包含 `bili_jct`）。
+
+## 结构化输出
+
+所有 `--json` / `--yaml` 输出都使用 [SCHEMA.md](./SCHEMA.md) 里的 envelope。
+主要命令现在会返回命令层规范化后的 payload，例如：
+
+- `bili video` → `data.video`、`data.subtitle`、`data.ai_summary`、`data.comments`、`data.related`、`data.warnings`
+- `bili hot` / `bili rank` → `data.items`
+- `bili search` → 规范化后的用户或视频列表
+- `bili like` / `bili coin` / `bili triple` / `bili unfollow` → 标准化写操作结果
+
+结构化错误码也区分成了 `not_authenticated`、`permission_denied`、`invalid_input`、`network_error`、`upstream_error`、`not_found` 等类型，便于脚本或 agent 做恢复和分支处理。
 
 ## AI Agent 使用建议
 

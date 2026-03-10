@@ -86,7 +86,7 @@ def test_user_not_found_yaml_error(runner):
         assert result.exit_code != 0
         data = _load_yaml(result.output)
         assert data["ok"] is False
-        assert data["error"]["code"] == "api_error"
+        assert data["error"]["code"] == "not_found"
 
 
 def test_whoami_json(runner, mock_user_info, mock_relation_info):
@@ -127,7 +127,9 @@ def test_video_json(runner, mock_video_info):
         result = runner.invoke(cli, ["video", "BV1test123", "--json"])
         assert result.exit_code == 0
         data = json.loads(result.output)["data"]
-        assert data["title"] == "测试视频标题"
+        assert data["video"]["title"] == "测试视频标题"
+        assert data["subtitle"]["available"] is False
+        assert data["warnings"] == []
 
 
 def test_video_yaml(runner, mock_video_info):
@@ -137,7 +139,8 @@ def test_video_yaml(runner, mock_video_info):
         result = runner.invoke(cli, ["video", "BV1test123", "--yaml"])
         assert result.exit_code == 0
         data = _load_yaml(result.output)["data"]
-        assert data["title"] == "测试视频标题"
+        assert data["video"]["title"] == "测试视频标题"
+        assert data["subtitle"]["available"] is False
 
 
 def test_video_display(runner, mock_video_info):
@@ -202,6 +205,35 @@ def test_video_subtitle_timeline_supports_srt_output(runner, mock_video_info):
         assert "00:00:00,000 --> 00:00:02,500" in result.output
 
 
+def test_video_structured_output_includes_requested_extras(runner, mock_video_info):
+    raw = [{"content": "Hello", "from": 0.0, "to": 2.5}]
+    comments = [{"rpid": 1, "member": {"mid": 2, "uname": "TestUser"}, "content": {"message": "Nice!"}, "like": 3}]
+    related = [{"bvid": "BV1rel", "title": "Related Video", "owner": {"name": "UP"}}]
+    with patch("bili_cli.commands.common.get_credential", return_value=None), \
+         patch("bili_cli.client.extract_bvid", return_value="BV1test123"), \
+         patch("bili_cli.client.get_video_info", new_callable=AsyncMock, return_value=mock_video_info), \
+         patch("bili_cli.client.get_video_subtitle", new_callable=AsyncMock, return_value=("Hello", raw)), \
+         patch(
+             "bili_cli.client.get_video_ai_conclusion",
+             new_callable=AsyncMock,
+             return_value={"model_result": {"summary": "AI summary"}},
+         ), \
+         patch("bili_cli.client.get_video_comments", new_callable=AsyncMock, return_value={"replies": comments}), \
+         patch("bili_cli.client.get_related_videos", new_callable=AsyncMock, return_value=related):
+        result = runner.invoke(
+            cli,
+            ["video", "BV1test123", "--subtitle-timeline", "--ai", "--comments", "--related", "--json"],
+        )
+        assert result.exit_code == 0
+        data = json.loads(result.output)["data"]
+        assert data["video"]["bvid"] == "BV1test123"
+        assert data["subtitle"]["available"] is True
+        assert data["subtitle"]["items"][0]["content"] == "Hello"
+        assert data["ai_summary"] == "AI summary"
+        assert data["comments"][0]["author"]["name"] == "TestUser"
+        assert data["related"][0]["bvid"] == "BV1rel"
+
+
 def test_video_subtitle_error_is_nonfatal(runner, mock_video_info):
     with patch("bili_cli.commands.common.get_credential", return_value=None), \
          patch("bili_cli.client.extract_bvid", return_value="BV1test123"), \
@@ -264,7 +296,7 @@ def test_hot_json(runner):
         result = runner.invoke(cli, ["hot", "--json"])
         assert result.exit_code == 0
         data = json.loads(result.output)["data"]
-        assert data["list"][0]["bvid"] == "BV1hot"
+        assert data["items"][0]["bvid"] == "BV1hot"
 
 
 def test_hot_yaml(runner):
@@ -274,7 +306,7 @@ def test_hot_yaml(runner):
         result = runner.invoke(cli, ["hot", "--yaml"])
         assert result.exit_code == 0
         data = _load_yaml(result.output)["data"]
-        assert data["list"][0]["bvid"] == "BV1hot"
+        assert data["items"][0]["bvid"] == "BV1hot"
 
 
 def test_hot_invalid_max(runner):
@@ -300,7 +332,7 @@ def test_rank_json(runner):
         result = runner.invoke(cli, ["rank", "--json"])
         assert result.exit_code == 0
         data = json.loads(result.output)["data"]
-        assert data["list"][0]["bvid"] == "BV1rank"
+        assert data["items"][0]["bvid"] == "BV1rank"
 
 
 def test_structured_output_flags_are_mutually_exclusive(runner, mock_video_info):
@@ -749,6 +781,45 @@ def test_unfollow_yes_calls_client(runner):
         result = runner.invoke(cli, ["unfollow", "946974", "--yes"])
         assert result.exit_code == 0
         mock_unfollow.assert_awaited_once_with(uid=946974, credential=mock_cred)
+
+
+def test_like_json_output(runner):
+    mock_cred = MagicMock()
+    mock_cred.bili_jct = "valid_jct"
+    with patch("bili_cli.commands.common.get_credential", return_value=mock_cred), \
+         patch("bili_cli.client.extract_bvid", return_value="BV1ok"), \
+         patch("bili_cli.client.like_video", new_callable=AsyncMock, return_value={}):
+        result = runner.invoke(cli, ["like", "BV1ok", "--json"])
+        assert result.exit_code == 0
+        data = json.loads(result.output)["data"]
+        assert data["action"] == "like"
+        assert data["bvid"] == "BV1ok"
+
+
+def test_coin_yaml_output(runner):
+    mock_cred = MagicMock()
+    mock_cred.bili_jct = "valid_jct"
+    with patch("bili_cli.commands.common.get_credential", return_value=mock_cred), \
+         patch("bili_cli.client.extract_bvid", return_value="BV1ok"), \
+         patch("bili_cli.client.coin_video", new_callable=AsyncMock, return_value={}):
+        result = runner.invoke(cli, ["coin", "BV1ok", "--num", "2", "--yaml"])
+        assert result.exit_code == 0
+        data = _load_yaml(result.output)["data"]
+        assert data["action"] == "coin"
+        assert data["coins"] == 2
+
+
+def test_triple_json_output(runner):
+    mock_cred = MagicMock()
+    mock_cred.bili_jct = "valid_jct"
+    with patch("bili_cli.commands.common.get_credential", return_value=mock_cred), \
+         patch("bili_cli.client.extract_bvid", return_value="BV1ok"), \
+         patch("bili_cli.client.triple_video", new_callable=AsyncMock, return_value={"like": True, "coin": True, "fav": True}):
+        result = runner.invoke(cli, ["triple", "BV1ok", "--json"])
+        assert result.exit_code == 0
+        data = json.loads(result.output)["data"]
+        assert data["action"] == "triple"
+        assert data["result"]["favorite"] is True
 
 
 def test_coin_invalid_num(runner):

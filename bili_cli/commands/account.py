@@ -7,20 +7,8 @@ import sys
 import click
 from rich.panel import Panel
 
+from .. import payloads
 from . import common
-
-
-def _bilibili_user_payload(info: dict) -> dict[str, object]:
-    """Normalize Bilibili user info for structured agent output."""
-    return {
-        "id": str(info.get("mid", "unknown")),
-        "name": info.get("name", "unknown"),
-        "username": "",
-        "level": info.get("level", 0),
-        "coins": info.get("coins", 0),
-        "sign": info.get("sign", ""),
-        "vip": info.get("vip", {}),
-    }
 
 
 @click.command()
@@ -68,14 +56,16 @@ def status(as_json: bool, as_yaml: bool):
     payload = common.success_payload(
         {
             "authenticated": True,
-            "user": _bilibili_user_payload(info),
+            "user": payloads.normalize_user(info),
         }
     )
-    if common.emit_structured(payload, output_format):
+    def render() -> None:
+        name = info.get("name", "unknown")
+        uid = info.get("mid", "unknown")
+        common.console.print(f"[green]✅ 已登录：[bold]{name}[/bold]  (UID: {uid})[/green]")
+
+    if common.emit_or_print(payload, output_format, render):
         return
-    name = info.get("name", "unknown")
-    uid = info.get("mid", "unknown")
-    common.console.print(f"[green]✅ 已登录：[bold]{name}[/bold]  (UID: {uid})[/green]")
 
 
 @click.command()
@@ -105,36 +95,38 @@ def whoami(as_json: bool, as_yaml: bool):
             raise SystemExit(1) from None
         common.exit_error(f"获取用户信息失败: {exc}")
 
-    if common.emit_structured(
-        common.success_payload({"user": _bilibili_user_payload(info), "relation": relation}),
-        output_format,
-    ):
+    payload = common.success_payload(
+        {"user": payloads.normalize_user(info), "relation": payloads.normalize_relation(relation)}
+    )
+
+    def render() -> None:
+        name = info.get("name", "unknown")
+        level = info.get("level", "?")
+        coins = info.get("coins", 0)
+        follower = relation.get("follower", 0)
+        following = relation.get("following", 0)
+
+        vip = info.get("vip", {})
+        vip_label = ""
+        if vip.get("status") == 1:
+            vip_type = "大会员" if vip.get("type") == 2 else "小会员"
+            vip_label = f"  |  🏅 {vip_type}"
+
+        sign = info.get("sign", "").strip()
+
+        lines = [
+            f"👤 [bold]{name}[/bold]  (UID: {uid})",
+            f"⭐ Level {level}  |  🪙 硬币 {coins}{vip_label}",
+            f"👥 粉丝 {common.format_count(follower)}  |  🔔 关注 {common.format_count(following)}",
+        ]
+        if sign:
+            lines.append(f"📝 {sign}")
+
+        common.console.print(Panel(
+            "\n".join(lines),
+            title="个人信息",
+            border_style="green",
+        ))
+
+    if common.emit_or_print(payload, output_format, render):
         return
-
-    name = info.get("name", "unknown")
-    level = info.get("level", "?")
-    coins = info.get("coins", 0)
-    follower = relation.get("follower", 0)
-    following = relation.get("following", 0)
-
-    vip = info.get("vip", {})
-    vip_label = ""
-    if vip.get("status") == 1:
-        vip_type = "大会员" if vip.get("type") == 2 else "小会员"
-        vip_label = f"  |  🏅 {vip_type}"
-
-    sign = info.get("sign", "").strip()
-
-    lines = [
-        f"👤 [bold]{name}[/bold]  (UID: {uid})",
-        f"⭐ Level {level}  |  🪙 硬币 {coins}{vip_label}",
-        f"👥 粉丝 {common.format_count(follower)}  |  🔔 关注 {common.format_count(following)}",
-    ]
-    if sign:
-        lines.append(f"📝 {sign}")
-
-    common.console.print(Panel(
-        "\n".join(lines),
-        title="个人信息",
-        border_style="green",
-    ))

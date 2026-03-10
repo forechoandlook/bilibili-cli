@@ -7,6 +7,7 @@ import json
 import logging
 import os
 import sys
+from collections.abc import Callable
 from typing import NoReturn
 
 import click
@@ -14,7 +15,7 @@ import yaml
 from rich.console import Console
 
 from .. import auth
-from ..exceptions import BiliError, InvalidBvidError
+from ..exceptions import AuthenticationError, BiliError, InvalidBvidError, NetworkError
 
 console = Console(stderr=True)
 OutputFormat = str | None
@@ -65,6 +66,14 @@ def emit_structured(data: object, output_format: OutputFormat) -> bool:
     return False
 
 
+def emit_or_print(data: object, output_format: OutputFormat, render: Callable[[], None]) -> bool:
+    """Emit structured data or fall back to a rich/text renderer."""
+    if emit_structured(data, output_format):
+        return True
+    render()
+    return False
+
+
 def success_payload(data: object) -> dict[str, object]:
     """Wrap structured success data in the shared agent schema."""
     return {
@@ -96,14 +105,14 @@ def _normalize_success_payload(data: object) -> object:
     return success_payload(data)
 
 
-def exit_error(message: str) -> NoReturn:
+def exit_error(message: str, *, code: str = "api_error", details: object | None = None) -> NoReturn:
     """Print an error message and exit with non-zero status."""
     ctx = click.get_current_context(silent=True)
     params = ctx.params if ctx is not None else {}
     as_json = bool(params.get("as_json", False))
     as_yaml = bool(params.get("as_yaml", False))
     output_format = None if as_json and as_yaml else resolve_output_format(as_json=as_json, as_yaml=as_yaml)
-    if emit_structured(error_payload("api_error", message), output_format):
+    if emit_structured(error_payload(code, message, details=details), output_format):
         sys.exit(1)
     console.print(f"[red]❌ {message}[/red]")
     sys.exit(1)
@@ -113,10 +122,16 @@ def run_or_exit(coro, action: str):
     """Run async call and convert unexpected errors to CLI-friendly failures."""
     try:
         return run(coro)
+    except InvalidBvidError as e:
+        exit_error(f"{action}: {e}", code="invalid_input")
+    except AuthenticationError as e:
+        exit_error(f"{action}: {e}", code="not_authenticated")
+    except NetworkError as e:
+        exit_error(f"{action}: {e}", code="network_error")
     except BiliError as e:
-        exit_error(f"{action}: {e}")
+        exit_error(f"{action}: {e}", code="upstream_error")
     except Exception as e:
-        exit_error(f"{action}: {e}")
+        exit_error(f"{action}: {e}", code="internal_error")
 
 
 def _to_int(value: object, default: int = 0) -> int:
@@ -186,8 +201,20 @@ def require_login(require_write: bool = False, message: str | None = None):
         # Diagnose a common case: saved session exists but lacks bili_jct.
         saved = get_credential(mode="optional")
         if saved and getattr(saved, "sessdata", "") and not getattr(saved, "bili_jct", ""):
-            exit_error("当前登录凭证不支持写操作（缺少 bili_jct）。请执行 bili login 重新登录。")
+            exit_error(
+                "当前登录凭证不支持写操作（缺少 bili_jct）。请执行 bili login 重新登录。",
+                code="permission_denied",
+            )
 
+    ctx = click.get_current_context(silent=True)
+    params = ctx.params if ctx is not None else {}
+    output_format = resolve_output_format(
+        as_json=bool(params.get("as_json", False)),
+        as_yaml=bool(params.get("as_yaml", False)),
+    )
+    error_message = message or "未登录。使用 bili login 登录。"
+    if emit_structured(error_payload("not_authenticated", error_message), output_format):
+        sys.exit(1)
     print_login_required(message)
     sys.exit(1)
 
@@ -210,4 +237,4 @@ def extract_bvid_or_exit(bv_or_url: str) -> str:
     try:
         return client.extract_bvid(bv_or_url)
     except (InvalidBvidError, ValueError) as e:
-        exit_error(str(e))
+        exit_error(str(e), code="invalid_input")

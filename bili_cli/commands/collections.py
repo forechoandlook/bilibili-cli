@@ -10,6 +10,7 @@ from typing import Any
 import click
 from rich.table import Table
 
+from .. import payloads
 from . import common
 
 
@@ -110,7 +111,7 @@ def favorites(fav_id: int | None, page: int, as_json: bool, as_yaml: bool):
     if fav_id is None:
         fav_list = common.run_or_exit(client.get_favorite_list(cred), "获取收藏夹列表失败")
 
-        if common.emit_structured(fav_list, output_format):
+        if common.emit_structured([payloads.normalize_favorite_folder(item) for item in fav_list], output_format):
             return
 
         if not fav_list:
@@ -138,7 +139,15 @@ def favorites(fav_id: int | None, page: int, as_json: bool, as_yaml: bool):
             "获取收藏夹内容失败",
         )
 
-        if common.emit_structured(data, output_format):
+        if common.emit_structured(
+            {
+                "folder_id": fav_id,
+                "page": page,
+                "has_more": bool(data.get("has_more", False)),
+                "items": [payloads.normalize_favorite_media(item) for item in (data.get("medias") or [])],
+            },
+            output_format,
+        ):
             return
 
         medias = data.get("medias") or []
@@ -189,7 +198,14 @@ def following(page: int, as_json: bool, as_yaml: bool):
         "获取关注列表失败",
     )
 
-    if common.emit_structured(data, output_format):
+    if common.emit_structured(
+        {
+            "page": page,
+            "total": data.get("total", 0),
+            "items": [payloads.normalize_following_user(item) for item in (data.get("list") or [])],
+        },
+        output_format,
+    ):
         return
 
     flist = data.get("list") or []
@@ -233,13 +249,21 @@ def history(page: int, count: int, as_json: bool, as_yaml: bool):
         "获取观看历史失败",
     )
 
-    if common.emit_structured(data, output_format):
-        return
-
     if isinstance(data, list):
         vlist = data
     else:
         vlist = data.get("list") or data.get("items") or data.get("data") or []
+
+    history_items = vlist if isinstance(vlist, list) else []
+    if common.emit_structured(
+        {
+            "page": page,
+            "count": min(count, len(history_items)) if history_items else 0,
+            "items": [payloads.normalize_history_item(item) for item in history_items[:count] if isinstance(item, dict)],
+        },
+        output_format,
+    ):
+        return
 
     if not isinstance(vlist, list) or not vlist:
         common.console.print("[yellow]观看历史为空[/yellow]")
@@ -284,7 +308,13 @@ def watch_later(as_json: bool, as_yaml: bool):
 
     data = common.run_or_exit(client.get_toview(cred), "获取稍后再看失败")
 
-    if common.emit_structured(data, output_format):
+    if common.emit_structured(
+        {
+            "count": data.get("count", 0),
+            "items": [payloads.normalize_watch_later_item(item) for item in (data.get("list") or [])],
+        },
+        output_format,
+    ):
         return
 
     vlist = data.get("list") or []
@@ -330,10 +360,16 @@ def feed(offset: str, as_json: bool, as_yaml: bool):
         "获取动态失败",
     )
 
-    if common.emit_structured(data, output_format):
+    items = data.get("items") or []
+    if common.emit_structured(
+        {
+            "items": [payloads.normalize_dynamic_item(item) for item in items if isinstance(item, dict)],
+            "next_offset": data.get("next_offset") or data.get("offset") or "",
+        },
+        output_format,
+    ):
         return
 
-    items = data.get("items") or []
     if not items:
         common.console.print("[yellow]暂无动态[/yellow]")
         return
@@ -405,10 +441,17 @@ def my_dynamics(offset: int, need_top: bool, count: int, as_json: bool, as_yaml:
         "获取我的动态失败",
     )
 
-    if common.emit_structured(data, output_format):
+    cards = data.get("cards") or []
+    if common.emit_structured(
+        {
+            "offset": offset,
+            "next_offset": data.get("next_offset") or data.get("offset") or "",
+            "items": [payloads.normalize_dynamic_item(card) for card in cards[:count] if isinstance(card, dict)],
+        },
+        output_format,
+    ):
         return
 
-    cards = data.get("cards") or []
     if not isinstance(cards, list) or not cards:
         common.console.print("[yellow]暂无我发布的动态[/yellow]")
         return
@@ -466,10 +509,13 @@ def dynamic_post(text: str | None, from_file: Path | None, as_json: bool, as_yam
         "发布动态失败",
     )
 
-    if common.emit_structured(data, output_format):
+    dynamic_id = data.get("dynamic_id") or data.get("dynamic_id_str") or data.get("dyn_id")
+    if common.emit_structured(
+        payloads.action_result("dynamic_post", dynamic_id=str(dynamic_id or ""), text=content),
+        output_format,
+    ):
         return
 
-    dynamic_id = data.get("dynamic_id") or data.get("dynamic_id_str") or data.get("dyn_id")
     if dynamic_id:
         common.console.print(f"[green]✅ 已发布动态: {dynamic_id}[/green]")
     else:
@@ -495,12 +541,15 @@ def dynamic_delete(dynamic_id: int, yes: bool, as_json: bool, as_yaml: bool):
             common.console.print("[yellow]已取消删除[/yellow]")
             return
 
-    data = common.run_or_exit(
+    common.run_or_exit(
         client.delete_dynamic(dynamic_id=dynamic_id, credential=cred),
         "删除动态失败",
     )
 
-    if common.emit_structured(data, output_format):
+    if common.emit_structured(
+        payloads.action_result("dynamic_delete", dynamic_id=str(dynamic_id)),
+        output_format,
+    ):
         return
 
     common.console.print(f"[green]🗑️ 已删除动态: {dynamic_id}[/green]")

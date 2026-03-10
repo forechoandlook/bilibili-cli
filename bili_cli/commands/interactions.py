@@ -4,46 +4,68 @@ from __future__ import annotations
 
 import click
 
+from .. import payloads
 from . import common
 
 
 @click.command()
 @click.argument("bv_or_url")
 @click.option("--undo", is_flag=True, help="取消点赞。")
-def like(bv_or_url: str, undo: bool):
+@click.option("--json", "as_json", is_flag=True, help="输出 JSON。")
+@click.option("--yaml", "as_yaml", is_flag=True, help="输出 YAML，推荐给 AI Agent。")
+def like(bv_or_url: str, undo: bool, as_json: bool, as_yaml: bool):
     """点赞视频。"""
     from .. import client
 
+    output_format = common.resolve_output_format(as_json=as_json, as_yaml=as_yaml)
     cred = common.require_login(require_write=True)
     bvid = common.extract_bvid_or_exit(bv_or_url)
 
     common.run_or_exit(client.like_video(bvid, credential=cred, undo=undo), "操作失败")
-    if undo:
-        common.console.print(f"[yellow]👎 已取消点赞: {bvid}[/yellow]")
-    else:
-        common.console.print(f"[green]👍 已点赞: {bvid}[/green]")
+    payload = payloads.action_result("unlike" if undo else "like", bvid=bvid, undo=undo)
+
+    def render() -> None:
+        if undo:
+            common.console.print(f"[yellow]👎 已取消点赞: {bvid}[/yellow]")
+        else:
+            common.console.print(f"[green]👍 已点赞: {bvid}[/green]")
+
+    if common.emit_or_print(payload, output_format, render):
+        return
 
 
 @click.command()
 @click.argument("bv_or_url")
 @click.option("--num", "-n", default=1, type=click.IntRange(1, 2), help="投币数量 (1 或 2)。")
-def coin(bv_or_url: str, num: int):
+@click.option("--json", "as_json", is_flag=True, help="输出 JSON。")
+@click.option("--yaml", "as_yaml", is_flag=True, help="输出 YAML，推荐给 AI Agent。")
+def coin(bv_or_url: str, num: int, as_json: bool, as_yaml: bool):
     """给视频投币。"""
     from .. import client
 
+    output_format = common.resolve_output_format(as_json=as_json, as_yaml=as_yaml)
     cred = common.require_login(require_write=True)
     bvid = common.extract_bvid_or_exit(bv_or_url)
 
     common.run_or_exit(client.coin_video(bvid, credential=cred, num=num), "投币失败")
-    common.console.print(f"[green]🪙 已投 {num} 枚硬币: {bvid}[/green]")
+    payload = payloads.action_result("coin", bvid=bvid, coins=num)
+
+    def render() -> None:
+        common.console.print(f"[green]🪙 已投 {num} 枚硬币: {bvid}[/green]")
+
+    if common.emit_or_print(payload, output_format, render):
+        return
 
 
 @click.command()
 @click.argument("bv_or_url")
-def triple(bv_or_url: str):
+@click.option("--json", "as_json", is_flag=True, help="输出 JSON。")
+@click.option("--yaml", "as_yaml", is_flag=True, help="输出 YAML，推荐给 AI Agent。")
+def triple(bv_or_url: str, as_json: bool, as_yaml: bool):
     """一键三连（点赞 + 投币 + 收藏）。"""
     from .. import client
 
+    output_format = common.resolve_output_format(as_json=as_json, as_yaml=as_yaml)
     cred = common.require_login(require_write=True)
     bvid = common.extract_bvid_or_exit(bv_or_url)
 
@@ -55,9 +77,23 @@ def triple(bv_or_url: str):
         parts.append("🪙 投币")
     if result.get("multiply") or result.get("fav"):
         parts.append("⭐ 收藏")
-    common.console.print(f"[green]🎉 一键三连成功: {bvid}[/green]")
-    if parts:
-        common.console.print(f"[dim]  {' + '.join(parts)}[/dim]")
+    payload = payloads.action_result(
+        "triple",
+        bvid=bvid,
+        result={
+            "like": bool(result.get("like")),
+            "coin": bool(result.get("coin")),
+            "favorite": bool(result.get("multiply") or result.get("fav")),
+        },
+    )
+
+    def render() -> None:
+        common.console.print(f"[green]🎉 一键三连成功: {bvid}[/green]")
+        if parts:
+            common.console.print(f"[dim]  {' + '.join(parts)}[/dim]")
+
+    if common.emit_or_print(payload, output_format, render):
+        return
 
 
 @click.command()
@@ -79,12 +115,15 @@ def unfollow(uid: int, yes: bool, as_json: bool, as_yaml: bool):
             common.console.print("[yellow]已取消操作[/yellow]")
             return
 
-    data = common.run_or_exit(
+    common.run_or_exit(
         client.unfollow_user(uid=uid, credential=cred),
         "取消关注失败",
     )
 
-    if common.emit_structured(data, output_format):
-        return
+    payload = payloads.action_result("unfollow", uid=uid)
 
-    common.console.print(f"[green]✅ 已取消关注 UID={uid}[/green]")
+    def render() -> None:
+        common.console.print(f"[green]✅ 已取消关注 UID={uid}[/green]")
+
+    if common.emit_or_print(payload, output_format, render):
+        return

@@ -5,6 +5,7 @@ from __future__ import annotations
 import click
 from rich.table import Table
 
+from .. import payloads
 from . import common
 
 
@@ -51,7 +52,64 @@ def video(
         "获取视频信息失败",
     )
 
-    if common.emit_structured(info, output_format):
+    subtitle_text = ""
+    subtitle_items: list[dict] = []
+    ai_summary = ""
+    comments_items: list[dict] = []
+    related_items: list[dict] = []
+    warnings: list[dict[str, str]] = []
+
+    if subtitle or subtitle_timeline:
+        sub_data = common.run_optional(
+            client.get_video_subtitle(bvid, credential=cred),
+            "获取字幕失败",
+        )
+        if sub_data is not None:
+            subtitle_text, subtitle_items = sub_data
+        else:
+            warnings.append({"code": "subtitle_unavailable", "message": "获取字幕失败"})
+
+    if ai:
+        ai_data = common.run_optional(
+            client.get_video_ai_conclusion(bvid, credential=cred),
+            "获取 AI 总结失败",
+        )
+        if ai_data is not None:
+            ai_summary = ai_data.get("model_result", {}).get("summary", "")
+        else:
+            warnings.append({"code": "ai_summary_unavailable", "message": "获取 AI 总结失败"})
+
+    if comments:
+        cm_data = common.run_optional(
+            client.get_video_comments(bvid, credential=cred),
+            "获取评论失败",
+        )
+        if cm_data is not None:
+            comments_items = cm_data.get("replies") or []
+        else:
+            warnings.append({"code": "comments_unavailable", "message": "获取评论失败"})
+
+    if related:
+        rel_list = common.run_optional(
+            client.get_related_videos(bvid, credential=cred),
+            "获取相关推荐失败",
+        )
+        if rel_list is not None:
+            related_items = rel_list
+        else:
+            warnings.append({"code": "related_unavailable", "message": "获取相关推荐失败"})
+
+    structured_payload = payloads.normalize_video_command_payload(
+        info,
+        subtitle_text=subtitle_text,
+        subtitle_items=subtitle_items,
+        subtitle_format=subtitle_format if subtitle_timeline else "plain",
+        ai_summary=ai_summary,
+        comments=comments_items,
+        related=related_items,
+        warnings=warnings,
+    )
+    if common.emit_structured(structured_payload, output_format):
         return
 
     stat = info.get("stat", {})
@@ -81,62 +139,40 @@ def video(
 
     if subtitle or subtitle_timeline:
         common.console.print("\n[bold]📝 字幕内容:[/bold]\n")
-        sub_data = common.run_optional(
-            client.get_video_subtitle(bvid, credential=cred),
-            "获取字幕失败",
-        )
-        if sub_data is not None:
-            sub_text, raw = sub_data
-            if subtitle_timeline and raw:
-                display_content = client.format_subtitle_timeline(raw, output_format=subtitle_format)
-            else:
-                display_content = sub_text
+        if subtitle_timeline and subtitle_items:
+            display_content = client.format_subtitle_timeline(subtitle_items, output_format=subtitle_format)
+        else:
+            display_content = subtitle_text
 
-            if display_content:
-                common.console.print(display_content)
-            else:
-                common.console.print("[yellow]⚠️  无字幕（可能需要登录或视频无字幕）[/yellow]")
+        if display_content:
+            common.console.print(display_content)
+        else:
+            common.console.print("[yellow]⚠️  无字幕（可能需要登录或视频无字幕）[/yellow]")
 
     if ai:
         common.console.print("\n[bold]🤖 AI 总结:[/bold]\n")
-        ai_data = common.run_optional(
-            client.get_video_ai_conclusion(bvid, credential=cred),
-            "获取 AI 总结失败",
-        )
-        if ai_data is not None:
-            summary = ai_data.get("model_result", {}).get("summary", "")
-            if summary:
-                common.console.print(summary)
-            else:
-                common.console.print("[yellow]⚠️  该视频暂无 AI 总结[/yellow]")
+        if ai_summary:
+            common.console.print(ai_summary)
+        else:
+            common.console.print("[yellow]⚠️  该视频暂无 AI 总结[/yellow]")
 
     if comments:
         common.console.print("\n[bold]💬 热门评论:[/bold]\n")
-        cm_data = common.run_optional(
-            client.get_video_comments(bvid, credential=cred),
-            "获取评论失败",
-        )
-        if cm_data is not None:
-            replies = cm_data.get("replies") or []
-            if not replies:
-                common.console.print("[yellow]暂无评论[/yellow]")
-            else:
-                for c in replies[:10]:
-                    member = c.get("member", {})
-                    content = c.get("content", {}).get("message", "")
-                    likes = c.get("like", 0)
-                    uname = member.get("uname", "")
-                    common.console.print(f"  [cyan]{uname}[/cyan]  [dim](👍 {likes})[/dim]")
-                    common.console.print(f"  {content[:120]}")
-                    common.console.print()
+        if not comments_items:
+            common.console.print("[yellow]暂无评论[/yellow]")
+        else:
+            for c in comments_items[:10]:
+                member = c.get("member", {})
+                content = c.get("content", {}).get("message", "")
+                likes = c.get("like", 0)
+                uname = member.get("uname", "")
+                common.console.print(f"  [cyan]{uname}[/cyan]  [dim](👍 {likes})[/dim]")
+                common.console.print(f"  {content[:120]}")
+                common.console.print()
 
     if related:
         common.console.print()
-        rel_list = common.run_optional(
-            client.get_related_videos(bvid, credential=cred),
-            "获取相关推荐失败",
-        )
-        if rel_list:
+        if related_items:
             table = Table(title="📎 相关推荐", border_style="blue")
             table.add_column("#", style="dim", width=4)
             table.add_column("BV号", style="cyan", width=14)
@@ -144,7 +180,7 @@ def video(
             table.add_column("UP主", width=12)
             table.add_column("播放", width=8, justify="right")
 
-            for i, rv in enumerate(rel_list[:10], 1):
+            for i, rv in enumerate(related_items[:10], 1):
                 ro = rv.get("owner", {})
                 rs = rv.get("stat", {})
                 table.add_row(
