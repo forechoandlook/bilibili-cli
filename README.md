@@ -1,6 +1,6 @@
 # bilibili-cli
 
-[![CI](https://github.com/jackwener/bilibili-cli/actions/workflows/ci.yml/badge.svg)](https://github.com/jackwener/bilibili-cli/actions/workflows/ci.yml)
+[![CI](https://github.com/forechoandlook/bilibili-cli/actions/workflows/ci.yml/badge.svg)](https://github.com/forechoandlook/bilibili-cli/actions/workflows/ci.yml)
 [![PyPI version](https://img.shields.io/pypi/v/bilibili_cli.svg)](https://pypi.org/project/bilibili-cli/)
 [![Python versions](https://img.shields.io/pypi/pyversions/bilibili_cli.svg)](https://pypi.org/project/bilibili-cli/)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](./LICENSE)
@@ -35,23 +35,13 @@ A CLI for Bilibili — browse videos, users, favorites from the terminal 📺
 ## Installation
 
 ```bash
-# Recommended: uv tool (fast, isolated)
-uv tool install bilibili-cli
-
-# Or: pipx
-pipx install bilibili-cli
-
-# If you need audio extraction support
-uv tool install "bilibili-cli[audio]"
-# or
-pipx install "bilibili-cli[audio]"
+go install github.com/forechoandlook/bilibili-cli/cmd/bili@latest
 ```
 
 Upgrade to the latest version:
 
 ```bash
-uv tool upgrade bilibili-cli
-# Or: pipx upgrade bilibili-cli
+go install github.com/forechoandlook/bilibili-cli/cmd/bili@latest
 ```
 
 > **Tip:** Upgrade regularly to avoid unexpected errors from outdated API handling.
@@ -61,23 +51,17 @@ Or from source:
 ```bash
 git clone git@github.com:jackwener/bilibili-cli.git
 cd bilibili-cli
-uv sync
+go build -o bili ./cmd/bili
 ```
 
-Run tests in the project environment:
+Run tests:
 
 ```bash
-uv sync --extra dev
-uv run pytest -q
-uv run ruff check .
-uv run python -m mypy bili_cli
+go test ./... -v
 ```
 
-If the project directory was moved and stale virtualenv wrappers remain, rerun:
-
-```bash
-uv sync --extra dev --reinstall
-```
+**Note:**
+This is the Go version of the tool. Audio extraction, subtitles extraction, and AI summary fetching features are omitted in this version compared to the older Python version. Also, browser cookies are no longer extracted automatically; please use QR code login (`bili login`).
 
 ## Usage
 
@@ -258,23 +242,13 @@ Structured error codes: `not_authenticated`, `permission_denied`, `invalid_input
 ## 安装
 
 ```bash
-# 推荐：uv tool（快速、隔离环境）
-uv tool install bilibili-cli
-
-# 或者：pipx
-pipx install bilibili-cli
-
-# 如果需要音频提取功能
-uv tool install "bilibili-cli[audio]"
-# 或
-pipx install "bilibili-cli[audio]"
+go install github.com/forechoandlook/bilibili-cli/cmd/bili@latest
 ```
 
 升级到最新版本：
 
 ```bash
-uv tool upgrade bilibili-cli
-# 或：pipx upgrade bilibili-cli
+go install github.com/forechoandlook/bilibili-cli/cmd/bili@latest
 ```
 
 > **提示：** 建议定期升级，避免因版本过旧导致的 API 调用异常。
@@ -284,23 +258,17 @@ uv tool upgrade bilibili-cli
 ```bash
 git clone git@github.com:jackwener/bilibili-cli.git
 cd bilibili-cli
-uv sync
+go build -o bili ./cmd/bili
 ```
 
 开发环境验证：
 
 ```bash
-uv sync --extra dev
-uv run pytest -q
-uv run ruff check .
-uv run python -m mypy bili_cli
+go test ./... -v
 ```
 
-如果项目目录发生过移动，导致旧的 virtualenv wrapper 失效，可重新执行：
-
-```bash
-uv sync --extra dev --reinstall
-```
+**注意：**
+此版本为 Go 语言重写版。相较于旧版的 Python 版本，移除了音频提取、字幕获取、以及 AI 总结获取的功能。并且不再自动提取浏览器 Cookies，请使用二维码扫码登录（`bili login`）。
 
 ## 使用示例
 
