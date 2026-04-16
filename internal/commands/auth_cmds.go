@@ -29,7 +29,7 @@ func requireLogin(requireWrite bool, asJSON, asYAML bool) *auth.Credential {
 		} else {
 			fmt.Println("⚠️  需要登录。使用 bili login 登录。")
 		}
-		panic("exit") // Will be caught by main wrapper
+		panic("exit:1") // Will be caught by main wrapper
 	}
 	return cred
 }

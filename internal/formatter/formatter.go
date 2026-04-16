@@ -118,7 +118,7 @@ func ExitError(code, message string, format OutputFormat) {
 	} else {
 		fmt.Fprintf(os.Stderr, "❌ %s\n", message)
 	}
-	os.Exit(1)
+	panic("exit:1")
 }
 
 func FormatDuration(seconds int) string {

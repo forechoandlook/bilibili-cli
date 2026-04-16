@@ -73,6 +73,8 @@ func (c *APIClient) R(ctx context.Context, cred *auth.Credential) *resty.Request
 			req.SetHeader("csrf", cred.BiliJCT)
 		}
 	}
+
+
 	return req
 }
 
