@@ -45,9 +45,14 @@ func AddUserCommands(rootCmd *cobra.Command) {
 			}
 
 			// Get user info
-			infoData, err := api.Call(cmd.Context(), "获取用户信息", api.R(cmd.Context(), cred).SetQueryParam("mid", fmt.Sprintf("%d", uid)), "GET", "https://api.bilibili.com/x/space/wbi/acc/info")
+			infoParams := map[string]string{"mid": fmt.Sprintf("%d", uid)}
+			infoData, err := api.CallWbi(cmd.Context(), "获取用户信息", api.R(cmd.Context(), cred).SetHeader("Referer", "https://space.bilibili.com/"), "GET", "https://api.bilibili.com/x/space/wbi/acc/info", infoParams, cred)
 			if err != nil {
-				formatter.ExitError("upstream_error", err.Error(), format)
+				// Fallback to legacy un-signed info API which often bypasses strict WBI requirements for basic usage
+				infoData, err = api.Call(cmd.Context(), "获取用户信息", api.R(cmd.Context(), cred).SetQueryParam("mid", fmt.Sprintf("%d", uid)), "GET", "https://api.bilibili.com/x/space/acc/info")
+				if err != nil {
+					formatter.ExitError("upstream_error", err.Error(), format)
+				}
 			}
 			var info map[string]interface{}
 			json.Unmarshal(infoData, &info)
@@ -112,9 +117,17 @@ func AddUserCommands(rootCmd *cobra.Command) {
 				perPage = 50
 			}
 
-			data, err := api.Call(cmd.Context(), "获取视频列表", api.R(cmd.Context(), cred).SetQueryParam("mid", uid).SetQueryParam("pn", "1").SetQueryParam("ps", fmt.Sprintf("%d", perPage)), "GET", "https://api.bilibili.com/x/space/wbi/arc/search")
+			params := map[string]string{
+				"mid": uid,
+				"pn": "1",
+				"ps": fmt.Sprintf("%d", perPage),
+			}
+			data, err := api.CallWbi(cmd.Context(), "获取视频列表", api.R(cmd.Context(), cred).SetHeader("Referer", "https://space.bilibili.com/"), "GET", "https://api.bilibili.com/x/space/wbi/arc/search", params, cred)
 			if err != nil {
-				formatter.ExitError("upstream_error", "获取视频列表失败: "+err.Error(), format)
+				data, err = api.Call(cmd.Context(), "获取视频列表", api.R(cmd.Context(), cred).SetQueryParam("mid", uid).SetQueryParam("pn", "1").SetQueryParam("ps", fmt.Sprintf("%d", perPage)), "GET", "https://api.bilibili.com/x/space/arc/search")
+				if err != nil {
+					formatter.ExitError("upstream_error", "获取视频列表失败: "+err.Error(), format)
+				}
 			}
 
 			var res map[string]interface{}
